@@ -1,6 +1,6 @@
 # Aisland Wallet
 
-The purpose of this project is to use a Linux Phone as cold wallet.
+The purpose of this project is to use a Linux Phone as cold wallet [Pinephone](https://www.pine64.org/pinephone/)
 The transactions are transmitted by QR code between the Cold Wallet and "Watching" wallet like Metamask.
 
 Linux operating system is much more safe of Android and iOS:
