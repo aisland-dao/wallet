@@ -6,6 +6,7 @@ const fs=require("fs");
 const aesjs=require("aes-js");
 const util_crypto=require("@polkadot/util-crypto"); 
 const util=require("@polkadot/util"); 
+const http = require('http');
 //const keyring=require("@polkadot/keyring"); 
 // set default to local host if not set
 const PATH_STORAGE = process.env.PATH_STORAGE;
@@ -15,7 +16,6 @@ if (typeof PATH_STORAGE === 'undefined') {
 }
 let app = express();
 console.log("Vault - v.1.00");
-console.log("Listening on port tcp/3000");
 mainloop();
 // main body of the app
 async function mainloop(){
@@ -61,7 +61,13 @@ async function mainloop(){
     });
 
     // listen on port 3000
-    let server = app.listen(3000, function () { });
+    let server = http.createServer(app);
+    server.listen(3000, 'localhost');
+    server.on('listening', function() {
+        console.log('Server started on port %s at %s', server.address().port, server.address().address);
+    });
+
+    
 
 }
 // function to encrypt and store the secret seed words with 3 layers of symmetric encryption
