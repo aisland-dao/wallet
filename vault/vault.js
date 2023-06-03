@@ -11,7 +11,7 @@ const Web3 = require('web3');
 const ethAccounts = require('web3-eth-accounts');
 // create web3 object
 const web3 = new Web3(Web3.givenProvider);
-//const keyring=require("@polkadot/keyring"); 
+const PolkaKeyRing=require("@polkadot/keyring"); 
 // set default to local host if not set
 const PATH_STORAGE = process.env.PATH_STORAGE;
 if (typeof PATH_STORAGE === 'undefined') {
@@ -46,7 +46,7 @@ async function mainloop(){
         let fn=""
         let i=0;
         while(1){
-            fn=PATH_STORAGE+"/account_"+i.toString();
+            fn=PATH_STORAGE+"/account_"+i.toString()+'.wallet';
             if(fs.existsSync(fn)){
                 i=i+1;
                 continue;
@@ -57,9 +57,25 @@ async function mainloop(){
         let ethaccounts = new ethAccounts();
         let ethaccount= await ethaccounts.create();
         let ethaddress=ethaccount.address;
+        // generate Polkadot/Kusama/Substrate Addresses
+        let keyring = new PolkaKeyRing.Keyring();
+        let pair = keyring.createFromUri(mnemonic);
+        const substrate=pair.address;
+        keyring = new PolkaKeyRing.Keyring();
+        keyring.setSS58Format(0);
+        pair = keyring.createFromUri(mnemonic);
+        const polkadot=pair.address;
+        keyring = new PolkaKeyRing.Keyring();
+        keyring.setSS58Format(2);
+        pair = keyring.createFromUri(mnemonic);
+        const kusama=pair.address;
         // store data
         let data='{"description":"'+description+'","encrypted":'+encrypted;
-        const addresses='"addresses":[{"ethereum":"'+ethaddress+'"}]'
+        let addresses='"addresses":[{"ethereum":"'+ethaddress+'"},';
+        addresses=addresses+'{"substrate":"'+substrate+'"},';
+        addresses=addresses+'{"polkadot":"'+polkadot+'"},';
+        addresses=addresses+'{"kusama":"'+kusama+'"}';
+        addresses=addresses+']'
         data=data+','+addresses+'}';
         // write encrypted mnemonic
         fs.writeFileSync(fn,data);
@@ -68,7 +84,28 @@ async function mainloop(){
         req.query.password="000000000000000000000000000000";
         password="0000000000000000000000000000000";
         mnemonic="00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+        pair="000000000000000000000000000000";
 
+    });
+    // function to send back the account list with the different addresses by network
+    app.get('/accountslist',async function (req, res) {
+        let i=0;
+        let accounts="[";
+        while(1){
+            fn=PATH_STORAGE+"/account_"+i.toString()+'.wallet';
+            if(fs.existsSync(fn)){
+                const fc=fs.readFileSync(fn);
+                const fd=JSON.parse(fc);
+                if(i>0)
+                    accounts=accounts+',';
+                accounts=accounts+'{"id":'+i.toString()+',"description":"'+fd.description+'","addresses":'+JSON.stringify(fd.addresses)+'}';
+                i=i+1;
+                continue;
+            }
+            break;
+        }
+        accounts=accounts+']';
+        res.send(accounts);
     });
     // function to sign a transaction
     app.post('/sign-ethereum',async function (req, res) {
@@ -159,7 +196,7 @@ async function encrypt_mnemonic(mnemonic,pwd) {
     let encryptedhex = aesjs.utils.hex.fromBytes(encryptedaesofb);
     //convert to Hex json
     let value = '{"iv":"' + randomstring + '","ivaescfb":"' + util.u8aToHex(ivaescfb) + '","ivaesctr":"' + util.u8aToHex(ivaesctr) + '","ivaesofb":"' + util.u8aToHex(ivaesofb) + '","encrypted":"' + encryptedhex + '"}';
-    // clear sensitive data
+    //clean sensitive variables (the garbage collector moves the pointer but the old data will cleaned later)
     pwd="0000000000000000000000000000000";
     mnemonic="00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
     dpwd1 = '';
@@ -222,7 +259,7 @@ async function decrypt_mnemonic(encrypted,pwd){
     let aesCfb = new aesjs.ModeOfOperation.cfb(keyaescfb, ivaescfb);
     let decrypted = aesCfb.decrypt(encryptedaescfb);
     let mnemonicdecrypted = aesjs.utils.utf8.fromBytes(decrypted);
-    //clean sensitive variables
+    //clean sensitive variables (the garbage collector moves the pointer but the old data will cleaned later)
     encryptedaescfb="00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
     encryptedaesctr="00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
     decrypted="00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
