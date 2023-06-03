@@ -7,6 +7,10 @@ const aesjs=require("aes-js");
 const util_crypto=require("@polkadot/util-crypto"); 
 const util=require("@polkadot/util"); 
 const http = require('http');
+const Web3 = require('web3');
+const ethAccounts = require('web3-eth-accounts');
+// create web3 object
+const web3 = new Web3(Web3.givenProvider);
 //const keyring=require("@polkadot/keyring"); 
 // set default to local host if not set
 const PATH_STORAGE = process.env.PATH_STORAGE;
@@ -24,7 +28,7 @@ async function mainloop(){
     // and description of the account
     // returns the account address and the mnemnonic seed for hard copy
     app.get('/newaccount',async function (req, res) {
-        const password=req.query.password;
+        let password=req.query.password;
         const description=req.query.description;
         if(typeof password === 'undefined'){
             res.send('{"result":"KO","message":"password parameter is mandatory"}');
@@ -36,7 +40,7 @@ async function mainloop(){
         }
         // generate random mnemonic seed BIP39 standard. 
         // The standard allows to use the same seed in different wallets not using any derivation
-        const mnemonic = util_crypto.mnemonicGenerate(12);
+        let mnemonic = util_crypto.mnemonicGenerate(12);
         const encrypted= await encrypt_mnemonic(mnemonic,password);
         // search for free slot
         let fn=""
@@ -49,13 +53,25 @@ async function mainloop(){
             }
             break;
         }
-        let data='{"description":"'+description+'","encrypted":'+encrypted+'}';
+        // generate Ethereum address
+        let ethaccounts = new ethAccounts();
+        let ethaccount= await ethaccounts.create();
+        let ethaddress=ethaccount.address;
+        // store data
+        let data='{"description":"'+description+'","encrypted":'+encrypted;
+        const addresses='"addresses":[{"ethereum":"'+ethaddress+'"}]'
+        data=data+','+addresses+'}';
         // write encrypted mnemonic
         fs.writeFileSync(fn,data);
-        res.send('{"result":"OK","message":"New Account Generated","mnemonic":"'+mnemonic+'","description":"'+description+'"}');
+        res.send('{"result":"OK","message":"New Account Generated","mnemonic":"'+mnemonic+'","description":"'+description+'",'+addresses+'}');
+        // fill passwords variables
+        req.query.password="000000000000000000000000000000";
+        password="0000000000000000000000000000000";
+        mnemonic="00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+
     });
     // function to sign a transaction
-    app.get('/sign',async function (req, res) {
+    app.post('/sign-ethereum',async function (req, res) {
 
 
     });
@@ -75,9 +91,9 @@ async function mainloop(){
 async function encrypt_mnemonic(mnemonic,pwd) {
 
     // get ascii value of first 2 bytes
-    const vb1 = pwd.charCodeAt(0);
-    const vb2 = pwd.charCodeAt(1);
-    const p = vb1 * vb2; // position to derive other 3 passwords of 32 bytes each on
+    let vb1 = pwd.charCodeAt(0);
+    let vb2 = pwd.charCodeAt(1);
+    let p = vb1 * vb2; // position to derive other 3 passwords of 32 bytes each on
     
     // derive the password used for encryption with an init vector (random string) xx hashes with 3 different algorithms
     // Kekkak,Sha512 and Blake algorythms
@@ -116,7 +132,7 @@ async function encrypt_mnemonic(mnemonic,pwd) {
     }
     // encryption
     const ivaescfb = aesjs.utils.utf8.toBytes(ivf);
-    const keyaescfb = dpwd1.slice(0, 32);
+    let keyaescfb = dpwd1.slice(0, 32);
     let aesCfb = new aesjs.ModeOfOperation.cfb(keyaescfb, ivaescfb);
     var mnemonicbytes = aesjs.utils.utf8.toBytes(mnemonic);
 
@@ -128,7 +144,7 @@ async function encrypt_mnemonic(mnemonic,pwd) {
     }
     const ivaesctr = aesjs.utils.utf8.toBytes(ivs);
     //const keyaes= aesjs.utils.utf8.toBytes(dpwd2.slice(0,32));
-    const keyaesctr = dpwd2.slice(0, 32);
+    let keyaesctr = dpwd2.slice(0, 32);
     let aesCtr = new aesjs.ModeOfOperation.ctr(keyaesctr, ivaesctr);
     let encryptedaesctr = aesCtr.encrypt(encryptedaescfb);
     // encrypt the outoput of AES256-CTR in AES256-OFB
@@ -137,12 +153,28 @@ async function encrypt_mnemonic(mnemonic,pwd) {
         ivso += characters.charAt(Math.floor(Math.random() * charactersLength));
     }
     const ivaesofb = aesjs.utils.utf8.toBytes(ivso);
-    const keyaesofb = dpwd3.slice(0, 32);
+    let keyaesofb = dpwd3.slice(0, 32);
     let aesOfb = new aesjs.ModeOfOperation.ofb(keyaesofb, ivaesofb);
     let encryptedaesofb = aesOfb.encrypt(encryptedaesctr);
     let encryptedhex = aesjs.utils.hex.fromBytes(encryptedaesofb);
     //convert to Hex json
     let value = '{"iv":"' + randomstring + '","ivaescfb":"' + util.u8aToHex(ivaescfb) + '","ivaesctr":"' + util.u8aToHex(ivaesctr) + '","ivaesofb":"' + util.u8aToHex(ivaesofb) + '","encrypted":"' + encryptedhex + '"}';
+    // clear sensitive data
+    pwd="0000000000000000000000000000000";
+    mnemonic="00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+    dpwd1 = '';
+    dpwd2 = '';
+    dpwd3 = '';
+    vb1="0000000000000000000000000000000";
+    vb2="0000000000000000000000000000000";
+    p=0;
+    encryptedaescfb="00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+    encryptedaesctr="00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+    encryptedaesofb="00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+    keyaescfb="00000000000000000000000000000";
+    keyaesctr="00000000000000000000000000000";
+    keyaesofb="00000000000000000000000000000";
+    // return value
     return(value);
 }
 // function to decrypt the web wallet and return a key pair
@@ -174,25 +206,33 @@ async function decrypt_mnemonic(encrypted,pwd){
     }
     // decrypt AES-OFB
     const ivaesofb=util.hexToU8a(enc.ivaesofb);
-    const keyaesofb= dpwd3.slice(0,32);
+    let keyaesofb= dpwd3.slice(0,32);
     let aesOfb = new aesjs.ModeOfOperation.ofb(keyaesofb, ivaesofb);
     const encryptedhex=enc.encrypted;
     const encryptedaesofb=aesjs.utils.hex.toBytes(encryptedhex);
     let encryptedaesctr = aesOfb.decrypt(encryptedaesofb);
     // decrypt AES-CTR
     const ivaesctr=util.hexToU8a(enc.ivaesctr);
-    const keyaesctr= dpwd2.slice(0,32);
+    let keyaesctr= dpwd2.slice(0,32);
     let aesCtr = new aesjs.ModeOfOperation.ctr(keyaesctr, ivaesctr);
     let encryptedaescfb = aesCtr.decrypt(encryptedaesctr);
     // decrypt AES-CFB
     const ivaescfb=util.hexToU8a(enc.ivaescfb);
-    const keyaescfb= dpwd1.slice(0,32);
+    let keyaescfb= dpwd1.slice(0,32);
     let aesCfb = new aesjs.ModeOfOperation.cfb(keyaescfb, ivaescfb);
     let decrypted = aesCfb.decrypt(encryptedaescfb);
     let mnemonicdecrypted = aesjs.utils.utf8.fromBytes(decrypted);
-    // return empty for wrong password or the decrypte mnemonic
+    //clean sensitive variables
+    encryptedaescfb="00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+    encryptedaesctr="00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+    decrypted="00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+    keyaescfb="00000000000000000000000000000";
+    keyaesctr="00000000000000000000000000000";
+    keyaesofb="00000000000000000000000000000";
+    // return empty for wrong password or the decrypted mnemonic
     if(!mnemonicdecrypted)
       return("");
     else 
       return(mnemonicdecrypted);
+
   }
